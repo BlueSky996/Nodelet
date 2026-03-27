@@ -81,12 +81,12 @@ export function startAllListeners(onIntent: IntentCallback) {
                 const outputToken = output.token?.toLowerCase();
                 if (outputToken !== USDC_BASE) continue;
 
-                const outputAmount = output.startAmount || "0";
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(output.amount), 6));
 
                 onIntent({
                     protocol: "UniswapX",
                     chainId: 8453,
-                    amountUSD: parseFloat(ethers.formatUnits(BigInt(outputAmount), 6)),
+                    amountUSD,
                     fromToken: order.input?.token || "unknown",
                     toToken: output.token || "unknown",
                     fillDeadline: order.deadline || Math.floor(Date.now() / 1000) + 120,
