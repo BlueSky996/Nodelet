@@ -11,28 +11,32 @@ async function run() {
     console.log(" Micro-solver listening for intents ...");
 
     startAllListeners(async (intent) => {
-        console.log(`\n [${intent.protocol}] Intent found:`, intent);
+        try {
+            console.log(`\n [${intent.protocol}] Intent found:`, intent);
 
-        const decision = askSolver({
-            fromChain: "base",
-            toChain: "unknown",
-            fromToken: intent.fromToken,
-            toToken: intent.toToken,
-            amountUSD: intent.amountUSD,
-        });
+            const decision = askSolver({
+                fromChain: "base",
+                toChain: "unknown",
+                fromToken: intent.fromToken,
+                toToken: intent.toToken,
+                amountUSD: intent.amountUSD,
+            });
 
-        console.log(`\n Decision:`, decision);
+            console.log(`\n Decision:`, decision);
 
 
-        if (decision.action === "fill") {
-            const guard = await isSafe(intent.amountUSD, intent.fillDeadline);
+            if (decision.action === "fill") {
+                const guard = await isSafe(intent.amountUSD, intent.fillDeadline);
 
-            if (guard.safe) {
-                console.log(" Safe to fill - executing .. ", guard.reason);
-                await fillIntent(intent.raw) // passing the raw event data
-            } else {
-                console.log(" Guard blocked fill --", guard.reason);
+                if (guard.safe) {
+                    console.log(" Safe to fill - executing .. ", guard.reason);
+                    await fillIntent(intent.raw) // passing the raw event data
+                } else {
+                    console.log(" Guard blocked fill --", guard.reason);
+                }
             }
+        } catch (err: any) {
+            console.error(" Intent processing error (bot stay alive):", err.message);
         }
     });
 }

@@ -67,7 +67,7 @@ export function startAllListeners(onIntent: IntentCallback) {
     oneinch.on("OrderFilled", (orderHash, remainingMakerAmount) => {
         onIntent({
             protocol: "1inch",
-            amountUSD: parseFloat(ethers.formatUnits(remainingMakerAmount, 6)), // needs order lookup for exact amount
+            amountUSD: parseFloat(ethers.formatUnits(remainingMakerAmount, 18)), // needs order lookup for exact amount
             fromToken: "unknown",
             toToken: "unknown",
             fillDeadline: Math.floor(Date.now() / 1000) + 120,
