@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 
 // --- Contract Addresses ---
 const ACROSS_SPOKE_POOL = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".toLowerCase();
 
 // --- ABIs ---
 const ACROSS_ABI = [
@@ -31,6 +32,7 @@ export function startAllListeners(onIntent: IntentCallback) {
 
     console.log("Listening on Across ...");
     across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, ...rest) => {
+        if (outputToken.toLowerCase() !== USDC_BASE) return;
         onIntent({
             protocol: "Across",
             chainId: Number(destinationChainId),
@@ -42,19 +44,35 @@ export function startAllListeners(onIntent: IntentCallback) {
         });
     });
 
+    const seenOrders = new Set<string>();
     console.log("Listening on UniswapX ...");
     setInterval(async () => {
         try {
             const res = await fetch("https://api.uniswap.org/v2/orders?orderStatus=open&chainId=8453&limit=20");
-            const data = await res.json() as any;
+            const data = (await res.json()) as any;
 
             for (const order of data.orders || []) {
+
+                // Skip already seen orders
+                if (seenOrders.has(order.orderHash)) continue;
+                seenOrders.add(order.orderHash);
+
+                // read nested output
+                const output = order.outputs?.[0];
+                if (!output) continue;
+                console.log("Raw output object:", JSON.stringify(output))
+
+                const outputToken = output.token?.toLowerCase();
+                if (outputToken !== USDC_BASE) continue;
+
+                const outputAmount = output.startAmount || "0";
+
                 onIntent({
                     protocol: "UniswapX",
                     chainId: 8453,
-                    amountUSD: parseFloat(order.input?.startAmount || "0") / 1e6,
+                    amountUSD: parseFloat(ethers.formatUnits(BigInt(outputAmount), 6)),
                     fromToken: order.input?.token || "unknown",
-                    toToken: order.outputs?.token || "unknown",
+                    toToken: output.token || "unknown",
                     fillDeadline: order.deadline || Math.floor(Date.now() / 1000) + 120,
                     raw: order,
                 });
