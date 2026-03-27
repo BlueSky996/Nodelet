@@ -1,5 +1,6 @@
 import { askSolver, type Intent } from "./solver.js";
 import { ethers } from "ethers";
+import { fillIntent } from "./filler.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -14,7 +15,7 @@ const spokePool = new ethers.Contract(SPOKE_POOL_BASE, SPOKE_POOL_ABI, provider)
 async function run() {
     console.log(" Micro-solver listening for intents ...");
 
-    spokePool.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId) => {
+    spokePool.on("V3FundsDeposited", async (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId) => {
         const intent: Intent = {
             fromChain: "base",
             toChain: destinationChainId.toString(),
@@ -28,7 +29,8 @@ async function run() {
         console.log(` Decision:`, decision);
 
         if (decision.action === "fill") {
-            console.log(" Filling intent -");
+            console.log(" Zeroclaw says fill - executing ... ");
+            await fillIntent(depositId); // passing the depositID from the event
         } else {
             console.log(" Skipping:", decision.reason);
         }

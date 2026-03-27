@@ -8,11 +8,13 @@ const FILL_ABI = [
     "function fillV3Relay((address depositor, address recipient, address exclusiveRelayer, address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 originChainId, uint32 depositId, uint32 fillDeadline, uint32 exclusivityDeadline, bytes message) relay, bytes32 repaymentChainId) external"
 ];
 
-const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
-const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
-const spokePool = new ethers.Contract(SPOKE_POOL_BASE, FILL_ABI, wallet);
 
 export async function fillIntent(relayData: any) {
+
+    const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
+    const spokePool = new ethers.Contract(SPOKE_POOL_BASE, FILL_ABI, wallet);
+
     try {
         console.log("💸 Attempting fill...");
         const tx = await (spokePool as any).fillV3Relay(relayData, 8453); // 8453 = Base chain ID
