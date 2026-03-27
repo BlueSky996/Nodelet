@@ -31,8 +31,9 @@ export function startAllListeners(onIntent: IntentCallback) {
 
 
     console.log("Listening on Across ...");
-    across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, ...rest) => {
+    across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, exclusivityDeadline, depositor, recipient, exclusiveRelayer, message) => {
         if (outputToken.toLowerCase() !== USDC_BASE) return;
+
         onIntent({
             protocol: "Across",
             chainId: Number(destinationChainId),
@@ -40,7 +41,22 @@ export function startAllListeners(onIntent: IntentCallback) {
             fromToken: inputToken,
             toToken: outputToken,
             fillDeadline: Number(fillDeadline),
-            raw: { depositId, destinationChainId, quoteTimestamp, ...rest },
+            raw: {
+                relay: {
+                    depositor,
+                    recipient,
+                    exclusiveRelayer,
+                    inputToken,
+                    outputToken,
+                    inputAmount,
+                    outputAmount,
+                    originChainId: 8453, // Base
+                    depositId,
+                    fillDeadline,
+                    exclusivityDeadline,
+                    message,
+                },
+            },
         });
     });
 
