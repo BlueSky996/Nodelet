@@ -1,42 +1,38 @@
 import { askSolver, type Intent } from "./solver.js";
-import axios from "axios";
+import { ethers } from "ethers";
+import dotenv from "dotenv";
+dotenv.config();
 
-const POLL_INTERVAL_MS = 10000; // check every 10 seconds
+const SPOKE_POOL_BASE = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
+const SPOKE_POOL_ABI = [
+    "event V3FundsDeposited(address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, uint32 depositId, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityDeadline, address depositor, address recipient, address exclusiveRelayer, bytes message)"
+];
 
-async function fetchIntents(): Promise<Intent[]> {
-    try {
-        const res = await axios.get("https://app.across.to/api/suggested-fees?");
-        return [{
-            fromChain: "solana",
-            toChain: "base",
-            fromToken: "USDC",
-            toToken: "USDC",
-            amountUSD: 51,
-        }];
-    } catch {
-        return [];
-    }
-}
-
+const provider = new ethers.WebSocketProvider(process.env.ALCHMEY_WSS || "");
+const spokePool = new ethers.Contract(SPOKE_POOL_BASE, SPOKE_POOL_ABI, provider);
 
 async function run() {
     console.log(" Micro-solver listening for intents ...");
 
-    setInterval(async () => {
-        const intents = await fetchIntents();
+    spokePool.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId) => {
+        const intent: Intent = {
+            fromChain: "base",
+            toChain: destinationChainId.toString(),
+            fromToken: inputToken,
+            toToken: outputToken,
+            amountUSD: parseFloat(ethers.formatUnits(inputAmount, 6)),
+        };
 
-        for (const intent of intents) {
-            console.log(`\n Intent found:`, intent);
-            const decision = askSolver(intent);
-            console.log(` Decision:`, decision);
+        console.log(`\n Intent found:`, intent);
+        const decision = askSolver(intent);
+        console.log(` Decision:`, decision);
 
-            if (decision.action === "fill") {
-                console.log(" Filling intent -");
-            } else {
-                console.log(" Skipping:", decision.reason);
-            }
+        if (decision.action === "fill") {
+            console.log(" Filling intent -");
+        } else {
+            console.log(" Skipping:", decision.reason);
         }
-    }, POLL_INTERVAL_MS);
+    });
 }
 
 run();
