@@ -16,14 +16,19 @@ export async function fillIntent(relayData: any) {
     const spokePool = new ethers.Contract(SPOKE_POOL_BASE, FILL_ABI, wallet);
 
     try {
-        console.log("💸 Attempting fill...");
-        const tx = await (spokePool as any).fillV3Relay(relayData, 8453); // 8453 = Base chain ID
-        console.log("📤 TX sent:", tx.hash);
+        console.log(" Attempting fill...");
+
+        const repaymentChainId = ethers.zeroPadValue(ethers.toBeHex(8453), 32);
+
+        const tx = await (spokePool as any).fillV3Relay(relayData, repaymentChainId); // 8453 = Base chain ID
+        console.log(" TX sent:", tx.hash);
+
         const receipt = await tx.wait();
-        console.log("✅ Fill confirmed! Block:", receipt.blockNumber);
+        console.log(" Fill confirmed! Block:", receipt.blockNumber);
+
         return true;
     } catch (err: any) {
-        console.error("❌ Fill failed:", err.message);
+        console.error(" Fill failed:", err.message);
         return false;
     }
 }
