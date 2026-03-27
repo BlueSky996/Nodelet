@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 
 export interface Intent {
     fromChain: string;
@@ -9,19 +9,23 @@ export interface Intent {
 }
 
 export function askSolver(intent: Intent): { action: "fill" | "skip"; reason: string } {
-    const prompt = `Intent: ${JSON.stringify(intent)}. Fee available: $${(intent.amountUSD * 0.005).toFixed(2)}. Fill or skip?`;
+    const fee = (intent.amountUSD * 0.005).toFixed(3);
+    const prompt = `Intent: ${JSON.stringify(intent)}. Fee available: $${fee}. Fill or skip?`;
 
     try {
-        const result = execSync(`zeroclaw agent -m "${prompt}"`, {
+        const result = spawnSync("zeroclaw", ["agent", "-m", prompt], {
             encoding: "utf-8",
             timeout: 15000,
         });
 
-        // extract JSON from Zeroclaw response
-        const match = result.match(/\{.*}/s);
-        if (!match) return { action: "skip", reason: "no valid response" };
+        const output = result.stdout || "";
+        console.log("🔍 Raw ZeroClaw response:", result);
 
+        // extract JSON from Zeroclaw response
+        const match = output.match(/\{.*}/s);
+        if (!match) return { action: "skip", reason: "no valid response" };
         return JSON.parse(match[0]);
+
     } catch (err) {
         return { action: "skip", reason: "zeroclaw error" };
     }

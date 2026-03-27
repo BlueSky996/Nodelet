@@ -23,7 +23,7 @@ export async function isSafe(
     }
 
     // Check wallet has enough balance
-    const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_WSS || "");
+    const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
     const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
     const usdc = new ethers.Contract(USDC_BASE, USDC_ABI, provider);
 
