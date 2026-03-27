@@ -1,0 +1,4 @@
+.env\nnode_modules\ndist
+
+node_modules/
+.env
