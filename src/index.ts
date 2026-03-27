@@ -16,7 +16,7 @@ async function run() {
 
             const decision = askSolver({
                 fromChain: "base",
-                toChain: "unknown",
+                toChain: intent.chainId.toString(),
                 fromToken: intent.fromToken,
                 toToken: intent.toToken,
                 amountUSD: intent.amountUSD,

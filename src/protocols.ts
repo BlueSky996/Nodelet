@@ -12,7 +12,8 @@ const ACROSS_ABI = [
 
 // Listener type
 export type IntentCallback = (intent: {
-    protocol: string;
+    protocol: "Across" | "UniswapX";
+    chainId: number;
     amountUSD: number;
     fromToken: string;
     toToken: string;
@@ -32,11 +33,12 @@ export function startAllListeners(onIntent: IntentCallback) {
     across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, ...rest) => {
         onIntent({
             protocol: "Across",
+            chainId: Number(destinationChainId),
             amountUSD: parseFloat(ethers.formatUnits(inputAmount, 6)),
             fromToken: inputToken,
             toToken: outputToken,
             fillDeadline: Number(fillDeadline),
-            raw: { depositId, destinationChainId, ...rest },
+            raw: { depositId, destinationChainId, quoteTimestamp, ...rest },
         });
     });
 
@@ -49,6 +51,7 @@ export function startAllListeners(onIntent: IntentCallback) {
             for (const order of data.orders || []) {
                 onIntent({
                     protocol: "UniswapX",
+                    chainId: 8453,
                     amountUSD: parseFloat(order.input?.startAmount || "0") / 1e6,
                     fromToken: order.input?.token || "unknown",
                     toToken: order.outputs?.token || "unknown",
