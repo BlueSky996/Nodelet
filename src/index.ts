@@ -1,9 +1,11 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { askSolver, type Intent } from "./solver.js";
 import { ethers } from "ethers";
 import { fillIntent } from "./filler.js";
 import { isSafe } from "./guard.js";
-import dotenv from "dotenv";
-dotenv.config();
+import { startAllListeners } from "./protocols.js";
 
 const SPOKE_POOL_BASE = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
 const SPOKE_POOL_ABI = [
@@ -16,27 +18,26 @@ const spokePool = new ethers.Contract(SPOKE_POOL_BASE, SPOKE_POOL_ABI, provider)
 async function run() {
     console.log(" Micro-solver listening for intents ...");
 
-    spokePool.on("V3FundsDeposited", async (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, fillDeadline) => {
-        const intent: Intent = {
-            fromChain: "base",
-            toChain: destinationChainId.toString(),
-            fromToken: inputToken,
-            toToken: outputToken,
-            amountUSD: parseFloat(ethers.formatUnits(inputAmount, 6)),
-        };
+    startAllListeners(async (intent) => {
+        console.log(`\n [${intent.protocol}] Intent found:`, intent);
 
-        console.log(`\n Intent found:`, intent);
-        const decision = askSolver(intent);
-        console.log(` Decision:`, decision);
+        const decision = askSolver({
+            fromChain: "base",
+            toChain: "unknown",
+            fromToken: intent.fromToken,
+            toToken: intent.toToken,
+            amountUSD: intent.amountUSD,
+        });
+
+        console.log(`\n Decision:`, decision);
+
 
         if (decision.action === "fill") {
-            const amountUSD = parseFloat(ethers.formatUnits(inputAmount, 6));
-            const guard = await isSafe(amountUSD, fillDeadline);
-
+            const guard = await isSafe(intent.amountUSD, intent.fillDeadline);
 
             if (guard.safe) {
                 console.log(" Safe to fill - executing .. ", guard.reason);
-                await fillIntent(depositId) // passing the depositID from the event
+                await fillIntent(intent.raw) // passing the raw event data
             } else {
                 console.log(" Guard blocked fill --", guard.reason);
             }
