@@ -1,8 +1,4 @@
 import { ethers } from "ethers";
-import dotenv from "dotenv";
-dotenv.config();
-
-const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
 
 // --- Contract Addresses ---
 const ACROSS_SPOKE_POOL = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
@@ -22,12 +18,6 @@ const ONEINCH_ABI = [
     "event OrderFilled(bytes32 orderHash, uint256 remainingMakerAmount)"
 ];
 
-// Contracts 
-
-const across = new ethers.Contract(ACROSS_SPOKE_POOL, ACROSS_ABI, provider);
-const uniswapx = new ethers.Contract(UNISWAPX_REACTOR, UNISWAPX_ABI, provider);
-const oneinch = new ethers.Contract(ONEINCH_FUSION, ONEINCH_ABI, provider);
-
 // Listener type
 export type IntentCallback = (intent: {
     protocol: string;
@@ -40,6 +30,15 @@ export type IntentCallback = (intent: {
 
 // Start all listeners
 export function startAllListeners(onIntent: IntentCallback) {
+
+    // Contracts 
+    const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
+
+    const across = new ethers.Contract(ACROSS_SPOKE_POOL, ACROSS_ABI, provider);
+    const uniswapx = new ethers.Contract(UNISWAPX_REACTOR, UNISWAPX_ABI, provider);
+    const oneinch = new ethers.Contract(ONEINCH_FUSION, ONEINCH_ABI, provider);
+
+
     console.log("Listening on Across ...");
     across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, ...rest) => {
         onIntent({
