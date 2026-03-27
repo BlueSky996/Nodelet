@@ -1,6 +1,7 @@
 import { askSolver, type Intent } from "./solver.js";
 import { ethers } from "ethers";
 import { fillIntent } from "./filler.js";
+import { isSafe } from "./guard.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -15,7 +16,7 @@ const spokePool = new ethers.Contract(SPOKE_POOL_BASE, SPOKE_POOL_ABI, provider)
 async function run() {
     console.log(" Micro-solver listening for intents ...");
 
-    spokePool.on("V3FundsDeposited", async (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId) => {
+    spokePool.on("V3FundsDeposited", async (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, fillDeadline) => {
         const intent: Intent = {
             fromChain: "base",
             toChain: destinationChainId.toString(),
@@ -29,10 +30,16 @@ async function run() {
         console.log(` Decision:`, decision);
 
         if (decision.action === "fill") {
-            console.log(" Zeroclaw says fill - executing ... ");
-            await fillIntent(depositId); // passing the depositID from the event
-        } else {
-            console.log(" Skipping:", decision.reason);
+            const amountUSD = parseFloat(ethers.formatUnits(inputAmount, 6));
+            const guard = await isSafe(amountUSD, fillDeadline);
+
+
+            if (guard.safe) {
+                console.log(" Safe to fill - executing .. ", guard.reason);
+                await fillIntent(depositId) // passing the depositID from the event
+            } else {
+                console.log(" Guard blocked fill --", guard.reason);
+            }
         }
     });
 }
