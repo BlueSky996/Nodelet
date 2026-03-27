@@ -1,5 +1,4 @@
 import { askSolver, type Intent } from "./solver.js";
-import { ethers } from "ethers";
 import { fillIntent } from "./filler.js";
 import { isSafe } from "./guard.js";
 import { startAllListeners } from "./protocols.js";
@@ -14,14 +13,15 @@ async function run() {
         try {
             console.log(`\n [${intent.protocol}] Intent found:`, intent);
 
-            const decision = askSolver({
+            const solverIntent: Intent = {
                 fromChain: "base",
                 toChain: intent.chainId.toString(),
                 fromToken: intent.fromToken,
                 toToken: intent.toToken,
                 amountUSD: intent.amountUSD,
-            });
+            };
 
+            const decision = askSolver(solverIntent);
             console.log(`\n Decision:`, decision);
 
 
@@ -30,7 +30,7 @@ async function run() {
 
                 if (guard.safe) {
                     console.log(" Safe to fill - executing .. ", guard.reason);
-                    await fillIntent(intent.raw) // passing the raw event data
+                    await fillIntent(intent.raw.relay); // exact relay object
                 } else {
                     console.log(" Guard blocked fill --", guard.reason);
                 }
