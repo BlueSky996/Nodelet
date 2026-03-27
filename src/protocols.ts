@@ -15,7 +15,7 @@ const UNISWAPX_ABI = [
 ];
 
 const ONEINCH_ABI = [
-    "event OrderFilled(bytes32 orderHash, uint256 remainingMakerAmount)"
+    "event OrderCreated(bytes32 indexed orderHash, address indexed maker, (address makerAsset, address takerAsset, uint256 makingAmount, uint256 takingAmount) order)"
 ];
 
 // Listener type
@@ -64,14 +64,21 @@ export function startAllListeners(onIntent: IntentCallback) {
     });
 
     console.log("Listening on 1inch ...");
-    oneinch.on("OrderFilled", (orderHash, remainingMakerAmount) => {
+    oneinch.on("OrderCreated", (orderHash, maker, order) => {
+        const amountUSD = parseFloat(ethers.formatUnits(order.makingAmount, 6));
         onIntent({
             protocol: "1inch",
-            amountUSD: parseFloat(ethers.formatUnits(remainingMakerAmount, 18)), // needs order lookup for exact amount
-            fromToken: "unknown",
-            toToken: "unknown",
+            amountUSD,
+            fromToken: order.makerAsset,
+            toToken: order.takerAsset,
             fillDeadline: Math.floor(Date.now() / 1000) + 120,
-            raw: { orderHash, remainingMakerAmount },
+            raw: { orderHash, maker, order },
         });
+    });
+
+    provider.on("block", (blockNumber) => {
+        if (blockNumber % 50 === 0) {
+            console.log(` Alive - block ${blockNumber} | Listening on Across, UniswapX, 1inch...`);
+        }
     });
 }
