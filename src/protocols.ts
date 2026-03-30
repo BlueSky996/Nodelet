@@ -62,16 +62,16 @@ export function startAllListeners(onIntent: IntentCallback) {
             if (outputToken.toLowerCase() !== USDC_BASE) return;
             if (Number(destinationChainId) !== 8453) return;
 
-            const key = `${originChainId}-${depositId}`;
+            const key = `${originChainId}-${depositId.toString()}`;
             if (acrossSeen.has(key)) return;
             acrossSeen.add(key);
 
             const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
             // skip if amount is too small or too large
-            if (amountUSD > 120 || amountUSD < 5) {
-                console.log(" Intent too large or too small - skipping ", amountUSD);
-                return;
-            }
+
+            console.log(
+                `[Across] match origin=${originChainId} depositId=${depositId.toString()} amount=${amountUSD}`
+            );
 
             onIntent({
                 protocol: "Across",
@@ -106,6 +106,7 @@ export function startAllListeners(onIntent: IntentCallback) {
             }
         });
     });
+
     setInterval(() => acrossSeen.clear(), 60 * 60 * 1000);
     const seenOrders = new Set<string>();
 
@@ -128,7 +129,10 @@ export function startAllListeners(onIntent: IntentCallback) {
                 if (outputToken !== USDC_BASE) continue;
 
                 const amountUSD = parseFloat(ethers.formatUnits(BigInt(output.amount), 6));
-                if (amountUSD > 120 || amountUSD < 5) continue;
+
+                console.log(
+                    `[UniswapX] match orderHash=${order.orderHash} amount=${amountUSD}`
+                );
 
                 onIntent({
                     protocol: "UniswapX",
@@ -165,7 +169,7 @@ export function startAllListeners(onIntent: IntentCallback) {
                     skip: 0,
                     take: 20,
                     filterMode: "CrossChain"
-                })
+                }),
             });
 
             const data = (await res.json()) as any;
@@ -175,7 +179,10 @@ export function startAllListeners(onIntent: IntentCallback) {
                 seenDebridgeOrders.add(order.orderId);
 
                 const amountUSD = parseFloat(ethers.formatUnits(BigInt(order.dstAmount || order.takeAmount || 0), 6));
-                if (amountUSD > 120 || amountUSD < 5) continue;
+
+                console.log(
+                    `[deBridge] match orderId=${order.orderId} amount=${amountUSD}`
+                );
 
                 onIntent({
                     protocol: "deBridge",
