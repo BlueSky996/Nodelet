@@ -13,7 +13,7 @@ const ACROSS_ABI = [
 
 // Listener type
 export type IntentCallback = (intent: {
-    protocol: "Across" | "UniswapX";
+    protocol: "Across" | "UniswapX" | "deBridge";
     chainId: number;
     amountUSD: number;
     fromToken: string;
@@ -34,8 +34,8 @@ export function startAllListeners(onIntent: IntentCallback) {
     across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, exclusivityDeadline, depositor, recipient, exclusiveRelayer, message) => {
         if (outputToken.toLowerCase() !== USDC_BASE) return;
 
-        const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
 
+        const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
         // skip if amount is too small or too large
         if (amountUSD > 120 || amountUSD < 5) {
             console.log(" Intent too large or too small - skipping ", amountUSD);
@@ -76,7 +76,6 @@ export function startAllListeners(onIntent: IntentCallback) {
             const data = (await res.json()) as any;
 
             for (const order of data.orders || []) {
-
                 // Skip already seen orders
                 if (seenOrders.has(order.orderHash)) continue;
                 seenOrders.add(order.orderHash);
@@ -84,12 +83,12 @@ export function startAllListeners(onIntent: IntentCallback) {
                 // read nested output
                 const output = order.outputs?.[0];
                 if (!output) continue;
-                console.log("Raw output object:", JSON.stringify(output))
 
                 const outputToken = output.token?.toLowerCase();
                 if (outputToken !== USDC_BASE) continue;
 
                 const amountUSD = parseFloat(ethers.formatUnits(BigInt(output.amount), 6));
+                if (amountUSD > 120 || amountUSD < 5) continue;
 
                 onIntent({
                     protocol: "UniswapX",
@@ -105,6 +104,44 @@ export function startAllListeners(onIntent: IntentCallback) {
             console.error("UniswapX poll error:", err.message);
         }
     }, 10000);
+
+    // Clear seen orders hourly
+    setInterval(() => seenOrders.clear(), 60 * 60 * 1000);
+
+    const seenDebridgeOrders = new Set<string>();
+    console.log("Listening on deBridge ...");
+    setInterval(async () => {
+        try {
+            // fetch open orders on base chain
+            const res = await fetch(
+                `https://api.dln.trade/v1.0/dln/order/list?status=Created&dstChainId=8453&dstTokenAddress=${USDC_BASE}&limit=20`
+            );
+            const data = (await res.json()) as any;
+
+            for (const order of data.orders || []) {
+                if (seenDebridgeOrders.has(order.orderId)) continue;
+                seenDebridgeOrders.add(order.orderId);
+
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(order.dstAmount), 6));
+                if (amountUSD > 120 || amountUSD < 5) continue;
+
+                onIntent({
+                    protocol: "deBridge",
+                    chainId: 8453,
+                    amountUSD,
+                    fromToken: order.srcChainTokenIN?.address || "unknown",
+                    toToken: order.dstChainTokenOut?.address || "unknown",
+                    fillDeadline: Math.floor(Date.now() / 1000) + 120,
+                    raw: order,
+                });
+            }
+        } catch (err: any) {
+            console.error("deBridge poll error:", err.message);
+        }
+    }, 10000);
+
+    // Clear seen orders hourly
+    setInterval(() => seenDebridgeOrders.clear(), 60 * 60 * 1000);
 
     // Check if it's still alive
     provider.on("block", (blockNumber) => {
