@@ -34,10 +34,18 @@ export function startAllListeners(onIntent: IntentCallback) {
     across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, exclusivityDeadline, depositor, recipient, exclusiveRelayer, message) => {
         if (outputToken.toLowerCase() !== USDC_BASE) return;
 
+        const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
+
+        // skip if amount is too small or too large
+        if (amountUSD > 120 || amountUSD < 5) {
+            console.log(" Intent too large or too small - skipping ", amountUSD);
+            return;
+        }
+
         onIntent({
             protocol: "Across",
             chainId: Number(destinationChainId),
-            amountUSD: parseFloat(ethers.formatUnits(inputAmount, 6)),
+            amountUSD,
             fromToken: inputToken,
             toToken: outputToken,
             fillDeadline: Number(fillDeadline),
@@ -50,7 +58,7 @@ export function startAllListeners(onIntent: IntentCallback) {
                     outputToken,
                     inputAmount,
                     outputAmount,
-                    originChainId: 8453, // Base
+                    originChainId: Number(destinationChainId),
                     depositId,
                     fillDeadline,
                     exclusivityDeadline,

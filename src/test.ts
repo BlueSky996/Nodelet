@@ -11,7 +11,7 @@ async function runTest() {
     // Fake intent, simulates a rea across depoist
     const fakeIntent = {
         protocol: "Across",
-        amountUSD: 1000,
+        amountUSD: 50,
         fromToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on base
         toToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         fillDeadline: Math.floor(Date.now() / 1000) + 300,
