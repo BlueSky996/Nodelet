@@ -151,8 +151,8 @@ export function startAllListeners(onIntent: IntentCallback) {
 
     // Clear seen orders hourly
     setInterval(() => seenOrders.clear(), 60 * 60 * 1000);
-
     const seenDebridgeOrders = new Set<string>();
+
     console.log("Listening on deBridge ...");
     setInterval(async () => {
         try {
@@ -175,10 +175,23 @@ export function startAllListeners(onIntent: IntentCallback) {
             const data = (await res.json()) as any;
 
             for (const order of data.orders || []) {
-                if (seenDebridgeOrders.has(order.orderId)) continue;
-                seenDebridgeOrders.add(order.orderId);
+                const orderId = order.orderId?.stringValue;
+                if (!orderId) continue;
 
-                const amountUSD = parseFloat(ethers.formatUnits(BigInt(order.dstAmount || order.takeAmount || 0), 6));
+                if (seenDebridgeOrders.has(orderId)) continue;
+                seenDebridgeOrders.add(orderId);
+
+                // token extraction
+                const fromToken = order.giveOfferWithMetadata?.tokenAddress?.stringValue?.toLowerCase() || "unkown";
+                const toToken = order.takeOfferWithMetadata?.tokenAddress?.stringValue?.toLowerCase() || "unkown";
+
+                // amount extraction
+                const rawAmount = order.takeOfferWithMetadata?.amount?.stringValue ||
+                    order.takeOfferWithMetadata?.finalAmount?.stringValue || "0";
+
+                const decimals = order.takeOfferWithMetadata?.decimals || 6;
+
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), decimals));
 
                 console.log(
                     `[deBridge] match orderId=${order.orderId} amount=${amountUSD}`
@@ -188,8 +201,8 @@ export function startAllListeners(onIntent: IntentCallback) {
                     protocol: "deBridge",
                     chainId: 8453,
                     amountUSD,
-                    fromToken: order.srcChainTokenIN?.address || order.giveToken?.address || "unknown",
-                    toToken: order.dstChainTokenOut?.address || order.takeToken?.address || "unknown",
+                    fromToken,
+                    toToken,
                     fillDeadline: Math.floor(Date.now() / 1000) + 120,
                     raw: order,
                 });
