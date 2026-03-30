@@ -4,11 +4,19 @@ import { ethers } from "ethers";
 const ACROSS_SPOKE_POOL = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".toLowerCase();
 
+// Multi-origin SpokePools (high volume origins to Base USDC)
+const ACROSS_ORIGINS = [
+    { chainId: 1, spokePool: "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5" }, // Ethereum
+    { chainId: 42161, spokePool: "0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A" }, // Arbitrum
+    { chainId: 10, spokePool: "0x6f26Bf09B1C792e3228e5467807a900A503c0281" }, // Optimism
+    { chainId: 137, spokePool: "0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096" }, // Polygon
+    { chainId: 8453, spokePool: ACROSS_SPOKE_POOL },  // Base (same-chain too)
+] as const;
+
 // --- ABIs ---
 const ACROSS_ABI = [
     "event V3FundsDeposited(address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, uint32 depositId, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityDeadline, address depositor, address recipient, address exclusiveRelayer, bytes message)"
 ];
-
 
 
 // Listener type
@@ -22,53 +30,85 @@ export type IntentCallback = (intent: {
     raw: any;
 }) => void;
 
+
+// Helper to create ws provider per chain
+const createProvider = (chainId: number): ethers.WebSocketProvider => {
+    const envKey = `ALCHEMY_WSS_${chainId}`;
+    const url = process.env[envKey] || process.env.ALCHEMY_WSS;
+
+    if (!url) {
+        console.warn(`Missing Alchemy WS URL for chain ${chainId}. Add ALCHEMY_WSS_${chainId} (or ALCHEMY_WSS) to your .env`)
+    }
+
+    const provider = new ethers.WebSocketProvider(url!);
+    provider.on("error", (err: any) => {
+        console.warn(`[Provider ${chainId}] WS error`, err.message);
+    });
+    return provider;
+};
+
 // Start all listeners
 export function startAllListeners(onIntent: IntentCallback) {
 
-    // Contracts 
-    const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
-    const across = new ethers.Contract(ACROSS_SPOKE_POOL, ACROSS_ABI, provider);
+    console.log("Listening on Across");
+    const acrossSeen = new Set<string>();
+
+    ACROSS_ORIGINS.forEach(({ chainId: originChainId, spokePool }) => {
+        const provider = createProvider(originChainId);
+        const across = new ethers.Contract(spokePool, ACROSS_ABI, provider);
 
 
-    console.log("Listening on Across ...");
-    across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, exclusivityDeadline, depositor, recipient, exclusiveRelayer, message) => {
-        if (outputToken.toLowerCase() !== USDC_BASE) return;
+        across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, exclusivityDeadline, depositor, recipient, exclusiveRelayer, message) => {
+            if (outputToken.toLowerCase() !== USDC_BASE) return;
+            if (Number(destinationChainId) !== 8453) return;
 
+            const key = `${originChainId}-${depositId}`;
+            if (acrossSeen.has(key)) return;
+            acrossSeen.add(key);
 
-        const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
-        // skip if amount is too small or too large
-        if (amountUSD > 120 || amountUSD < 5) {
-            console.log(" Intent too large or too small - skipping ", amountUSD);
-            return;
-        }
+            const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
+            // skip if amount is too small or too large
+            if (amountUSD > 120 || amountUSD < 5) {
+                console.log(" Intent too large or too small - skipping ", amountUSD);
+                return;
+            }
 
-        onIntent({
-            protocol: "Across",
-            chainId: Number(destinationChainId),
-            amountUSD,
-            fromToken: inputToken,
-            toToken: outputToken,
-            fillDeadline: Number(fillDeadline),
-            raw: {
-                relay: {
-                    depositor,
-                    recipient,
-                    exclusiveRelayer,
-                    inputToken,
-                    outputToken,
-                    inputAmount,
-                    outputAmount,
-                    originChainId: Number(destinationChainId),
-                    depositId,
-                    fillDeadline,
-                    exclusivityDeadline,
-                    message,
+            onIntent({
+                protocol: "Across",
+                chainId: 8453,
+                amountUSD,
+                fromToken: inputToken,
+                toToken: outputToken,
+                fillDeadline: Number(fillDeadline),
+                raw: {
+                    relay: {
+                        depositor,
+                        recipient,
+                        exclusiveRelayer,
+                        inputToken,
+                        outputToken,
+                        inputAmount,
+                        outputAmount,
+                        originChainId,
+                        depositId,
+                        fillDeadline,
+                        exclusivityDeadline,
+                        message,
+                    },
                 },
-            },
+            });
+        });
+
+        // Heartbeat per chain
+        provider.on("block", (blockNumber: number) => {
+            if (blockNumber % 50 === 0) {
+                console.log(`[Across ${originChainId}] Alive - block ${blockNumber}`);
+            }
         });
     });
-
+    setInterval(() => acrossSeen.clear(), 60 * 60 * 1000);
     const seenOrders = new Set<string>();
+
     console.log("Listening on UniswapX ...");
     setInterval(async () => {
         try {
@@ -113,24 +153,36 @@ export function startAllListeners(onIntent: IntentCallback) {
     setInterval(async () => {
         try {
             // fetch open orders on base chain
-            const res = await fetch(
-                `https://api.dln.trade/v1.0/dln/order/list?status=Created&dstChainId=8453&dstTokenAddress=${USDC_BASE}&limit=20`
-            );
+            const res = await fetch(`https://dln-api.debridge.finance/api/Orders/filteredList`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    takeChainIds: [8453],
+                    orderStates: ["Created"],
+                    takeOfferWithMetadata: {
+                        tokenAddress: USDC_BASE
+                    },
+                    skip: 0,
+                    take: 20,
+                    filterMode: "CrossChain"
+                })
+            });
+
             const data = (await res.json()) as any;
 
             for (const order of data.orders || []) {
                 if (seenDebridgeOrders.has(order.orderId)) continue;
                 seenDebridgeOrders.add(order.orderId);
 
-                const amountUSD = parseFloat(ethers.formatUnits(BigInt(order.dstAmount), 6));
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(order.dstAmount || order.takeAmount || 0), 6));
                 if (amountUSD > 120 || amountUSD < 5) continue;
 
                 onIntent({
                     protocol: "deBridge",
                     chainId: 8453,
                     amountUSD,
-                    fromToken: order.srcChainTokenIN?.address || "unknown",
-                    toToken: order.dstChainTokenOut?.address || "unknown",
+                    fromToken: order.srcChainTokenIN?.address || order.giveToken?.address || "unknown",
+                    toToken: order.dstChainTokenOut?.address || order.takeToken?.address || "unknown",
                     fillDeadline: Math.floor(Date.now() / 1000) + 120,
                     raw: order,
                 });
@@ -143,10 +195,4 @@ export function startAllListeners(onIntent: IntentCallback) {
     // Clear seen orders hourly
     setInterval(() => seenDebridgeOrders.clear(), 60 * 60 * 1000);
 
-    // Check if it's still alive
-    provider.on("block", (blockNumber) => {
-        if (blockNumber % 50 === 0) {
-            console.log(` Alive - block ${blockNumber} | Listening on Across, UniswapX...`);
-        }
-    });
 }
