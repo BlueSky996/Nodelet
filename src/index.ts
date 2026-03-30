@@ -21,6 +21,12 @@ async function run() {
                 amountUSD: intent.amountUSD,
             };
 
+            // skip if amount is too small or too large
+            if (intent.amountUSD > 120 || intent.amountUSD < 5) {
+                console.log(" Intent too large or too small - skipping ", intent.amountUSD);
+                return;
+            }
+
             const decision = askSolver(solverIntent);
             console.log(`\n Decision:`, decision);
 
