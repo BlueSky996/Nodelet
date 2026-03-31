@@ -115,23 +115,29 @@ export function startAllListeners(onIntent: IntentCallback) {
         try {
             const res = await fetch("https://api.uniswap.org/v2/orders?orderStatus=open&chainId=8453&limit=20");
             const data = (await res.json()) as any;
+            console.log("[UniswapX] orders returned:", data.orders?.length);
 
             for (const order of data.orders || []) {
+                const orderHash = order.orderHash;
+                if (!orderHash) continue;
+
                 // Skip already seen orders
-                if (seenOrders.has(order.orderHash)) continue;
-                seenOrders.add(order.orderHash);
+                if (seenOrders.has(orderHash)) continue;
+                seenOrders.add(orderHash);
 
                 // read nested output
-                const output = order.outputs?.[0];
+                const output = order.outputs?.[0] || order.quote?.outputs?.[0];
                 if (!output) continue;
 
                 const outputToken = output.token?.toLowerCase();
                 if (outputToken !== USDC_BASE) continue;
 
-                const amountUSD = parseFloat(ethers.formatUnits(BigInt(output.amount), 6));
+                const rawAmount = output.amount || output.startAmount || "0";
+
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), 6));
 
                 console.log(
-                    `[UniswapX] match orderHash=${order.orderHash} amount=${amountUSD}`
+                    `[UniswapX] match orderHash=${orderHash} token=${outputToken} amount=${amountUSD}`
                 );
 
                 onIntent({

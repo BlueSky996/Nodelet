@@ -21,19 +21,19 @@ async function run() {
                 amountUSD: intent.amountUSD,
             };
 
+            const guard = await isSafe(intent.amountUSD, intent.fillDeadline, intent.fromToken, intent.toToken);
+            if (!guard.safe) {
+                console.log(" Guard blocked fill --", guard.reason);
+                return;
+            }
+
             const decision = askSolver(solverIntent);
             console.log(`\n Decision:`, decision);
 
 
             if (decision.action === "fill") {
-                const guard = await isSafe(intent.amountUSD, intent.fillDeadline);
-
-                if (guard.safe) {
-                    console.log(" Safe to fill - executing .. ", guard.reason);
-                    await fillIntent(intent.raw.relay); // exact relay object
-                } else {
-                    console.log(" Guard blocked fill --", guard.reason);
-                }
+                console.log(" Executing fill ...")
+                await fillIntent(intent.raw.relay); // exact relay object
             }
         } catch (err: any) {
             console.error(" Intent processing error (bot stay alive):", err.message);
