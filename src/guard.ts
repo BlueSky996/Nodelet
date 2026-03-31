@@ -35,6 +35,10 @@ export async function isSafe(
     toToken: string,
 ): Promise<{ safe: boolean; reason: string }> {
 
+    if (amountUSD < config.minAmountUSD || amountUSD > config.maxAmountUSD) {
+        return { safe: false, reason: `amount out of range: $${amountUSD.toFixed(2)}` };
+    }
+
     if (amountUSD < config.minProfitUSD) {
         return { safe: false, reason: "amount too small" };
     }
