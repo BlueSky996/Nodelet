@@ -27,7 +27,7 @@ async function run() {
                 return;
             }
 
-            const decision = askSolver(solverIntent);
+            const decision = await askSolver(solverIntent);
             console.log(`\n Decision:`, decision);
 
 

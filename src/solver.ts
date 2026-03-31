@@ -1,4 +1,4 @@
-import { spawnSync } from "child_process";
+import { spawn } from "child_process";
 
 export interface Intent {
     fromChain: string;
@@ -8,25 +8,44 @@ export interface Intent {
     amountUSD: number;
 }
 
-export function askSolver(intent: Intent): { action: "fill" | "skip"; reason: string } {
-    const fee = (intent.amountUSD * 0.005).toFixed(3);
-    const prompt = `Intent: ${JSON.stringify(intent)}. Fee available: $${fee}. Fill or skip?`;
+export function askSolver(intent: Intent): Promise<{ action: "fill" | "skip"; reason: string }> {
+    return new Promise((resolve) => {
+        const fee = (intent.amountUSD * 0.005).toFixed(3);
+        const prompt = `Intent: ${JSON.stringify(intent)}. Fee available: $${fee}. Fill or skip?`;
 
-    try {
-        const result = spawnSync("zeroclaw", ["agent", "-m", prompt], {
-            encoding: "utf-8",
-            timeout: 15000,
+        const child = spawn("zeroclaw", ["agent", "-m", prompt]);
+
+        let output = "";
+
+        child.stdout.on("data", (data) => {
+            output += data.toString();
         });
 
-        const output = result.stdout || "";
-        console.log("🔍 Raw ZeroClaw response:", result);
 
-        // extract JSON from Zeroclaw response
-        const match = output.match(/\{.*}/s);
-        if (!match) return { action: "skip", reason: "no valid response" };
-        return JSON.parse(match[0]);
+        child.on("close", () => {
+            try {
+                console.log("🔍 Raw ZeroClaw response:", output);
 
-    } catch (err) {
-        return { action: "skip", reason: "zeroclaw error" };
-    }
+                const match = output.match(/\{[^}]*\}/);
+                if (!match) {
+                    return resolve({ action: "skip", reason: "no valid response" });
+                }
+
+                return resolve(JSON.parse(match[0]));
+            } catch {
+                return resolve({ action: "skip", reason: "parse error" });
+            }
+        });
+
+        child.on("error", () => {
+            resolve({ action: "skip", reason: "zeroclaw error" });
+        });
+
+        // timeout fallback
+        setTimeout(() => {
+            child.kill();
+            resolve({ action: "skip", reason: "timeout" });
+        }, 15000);
+
+    });
 }
