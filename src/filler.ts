@@ -8,19 +8,26 @@ const FILL_ABI = [
     "function fillV3Relay((address depositor, address recipient, address exclusiveRelayer, address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 originChainId, uint32 depositId, uint32 fillDeadline, uint32 exclusivityDeadline, bytes message) relay, bytes32 repaymentChainId) external"
 ];
 
+const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
+const spokePool = new ethers.Contract(SPOKE_POOL_BASE, FILL_ABI, wallet);
 
+const filled = new Set<string>();
 export async function fillIntent(relayData: any) {
+    const key = `${relayData.originChainId}-${relayData.depositId}`;
 
-    const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
-    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
-    const spokePool = new ethers.Contract(SPOKE_POOL_BASE, FILL_ABI, wallet);
+    if (filled.has(key)) {
+        console.log(" Already filled, skipping")
+        return false;
+    }
+    filled.add(key);
 
     try {
         console.log(" Attempting fill...");
 
         const repaymentChainId = ethers.zeroPadValue(ethers.toBeHex(8453), 32);
 
-        const tx = await (spokePool as any).fillV3Relay(relayData, repaymentChainId); // 8453 = Base chain ID
+        const tx = await (spokePool as any).fillV3Relay(relayData, repaymentChainId, { gasLimit: 1000000, }); // 8453 = Base chain ID
         console.log(" TX sent:", tx.hash);
 
         const receipt = await tx.wait();
