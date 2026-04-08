@@ -6,12 +6,19 @@ export interface Intent {
     fromToken: string;
     toToken: string;
     amountUSD: number;
+    needsSwap: boolean;
+    sourceToken?: string;
 }
 
 export function askSolver(intent: Intent): Promise<{ action: "fill" | "skip"; reason: string }> {
     return new Promise((resolve) => {
         const fee = (intent.amountUSD * 0.005).toFixed(3);
-        const prompt = `Intent: ${JSON.stringify(intent)}. Fee available: $${fee}. Fill or skip?`;
+
+        // tell the AI about the PageSwapEvent
+        const swapContext = intent.needsSwap
+            ? `NOTE: Requires JIT Swap from ${intent.sourceToken} to ${intent.toToken} first (Slipage risk).`
+            : `Direct fill avaliable (No swap needed).`;
+        const prompt = `Intent: ${JSON.stringify(intent)}. Fee available: $${fee}. ${swapContext} Fill or skip?`;
 
         const child = spawn("zeroclaw", ["agent", "-m", prompt]);
 
