@@ -39,6 +39,7 @@ async function run() {
             console.log(`\n Decision:`, decision);
 
             if (decision.action === "fill") {
+                // if we need to swap
                 if (guard.needsSwap && guard.sourceToken) {
                     console.log(` JIT SWAP: ${guard.sourceToken} -> ${intent.toToken}`)
                     const swapSuccess = await executeSwap(guard.sourceToken, intent.toToken, intent.amountUSD, wallet);

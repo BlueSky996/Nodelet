@@ -28,7 +28,7 @@ async function getInventoryUSD(): Promise<Record<string, number>> {
             balance = await provider.getBalance(wallet.address);
         } else {
             const contract = new Contract(address, ERC20_ABI, provider);
-            balance = await contract.balanceOf(wallet.address);
+            balance = await (contract as any).balanceOf(wallet.address);
         }
         const units = parseFloat(ethers.formatUnits(balance, info.decimals));
         inventory[address.toLowerCase()] = units * info.priceUSD;
@@ -91,9 +91,10 @@ export async function isSafe(
     }
 
     if (highestVal >= (amountUSD + executionCosts)) {
+        const sourceSymbol = TOKENS[bestSource]?.symbol || "Unknown";
         return {
             safe: true,
-            reason: `Swap required from ${TOKENS[bestSource].symbol}`,
+            reason: `Swap required from ${sourceSymbol}`,
             needsSwap: true,
             sourceToken: bestSource
         };
