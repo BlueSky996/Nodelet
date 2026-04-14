@@ -25,9 +25,9 @@ export async function fillIntent(relayData: any) {
     try {
         console.log(" Attempting fill...");
 
-        const repaymentChainId = ethers.zeroPadValue(ethers.toBeHex(8453), 32);
+        const repaymentChainId = ethers.toBeHex(8453, 32);
 
-        const tx = await (spokePool as any).fillV3Relay(relayData, repaymentChainId, { gasLimit: 1000000, }); // 8453 = Base chain ID
+        const tx = await (spokePool as any).fillV3Relay(relayData, repaymentChainId, { gasLimit: 500000, }); // 8453 = Base chain ID
         console.log(" TX sent:", tx.hash);
 
         const receipt = await tx.wait();

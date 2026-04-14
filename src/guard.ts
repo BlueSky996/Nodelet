@@ -48,7 +48,7 @@ export async function isSafe(
     const source = fromToken.toLowerCase();
 
     // whitelist check
-    if (!TOKENS[target] || !TOKENS[source]) {
+    if (!TOKENS[target]) {
         return { safe: false, reason: "Token not in whitelist", needsSwap: false };
     }
 

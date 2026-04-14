@@ -33,6 +33,8 @@ async function run() {
                 fromToken: intent.fromToken,
                 toToken: intent.toToken,
                 amountUSD: intent.amountUSD,
+                needsSwap: guard.needsSwap,
+                sourceToken: guard.sourceToken,
             };
 
             const decision = await askSolver(solverIntent);
