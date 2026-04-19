@@ -1,8 +1,19 @@
+import { WHITELIST } from "./guard.js";
 import { ethers } from "ethers";
 
 // --- Contract Addresses ---
 const ACROSS_SPOKE_POOL = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".toLowerCase();
+
+// Extract just the addresses for API filtering
+const WHITELISTED_ADDRESSES = Object.keys(WHITELIST);
+
+
+const getPriceUSD = (tokenSymbol: string): number => {
+    // Logic to fetch from Pyth/Chainlink/CoinGecko goes here
+    const prices: Record<string, number> = { "USDC": 1, "ETH": 2500, "WETH": 2500, "cbBTC": 65000, "AERO": 0.80 };
+    return prices[tokenSymbol] || 0;
+};
+
 
 // Multi-origin SpokePools (high volume origins to Base USDC)
 const ACROSS_ORIGINS = [
@@ -59,14 +70,15 @@ export function startAllListeners(onIntent: IntentCallback) {
 
 
         across.on("V3FundsDeposited", (inputToken, outputToken, inputAmount, outputAmount, destinationChainId, depositId, quoteTimestamp, fillDeadline, exclusivityDeadline, depositor, recipient, exclusiveRelayer, message) => {
-            if (outputToken.toLowerCase() !== USDC_BASE) return;
-            if (Number(destinationChainId) !== 8453) return;
+            const targetToken = outputToken.toLowerCase();
+            const tokenData = WHITELIST[targetToken];
+            if (!tokenData || Number(destinationChainId) !== 8453) return;
 
             const key = `${originChainId}-${depositId.toString()}`;
             if (acrossSeen.has(key)) return;
             acrossSeen.add(key);
 
-            const amountUSD = parseFloat(ethers.formatUnits(outputAmount, 6));
+            const amountUSD = parseFloat(ethers.formatUnits(outputAmount, tokenData.decimals) * tokenData.priceUSD);
             // skip if amount is too small or too large
 
             console.log(
@@ -130,11 +142,13 @@ export function startAllListeners(onIntent: IntentCallback) {
                 if (!output) continue;
 
                 const outputToken = output.token?.toLowerCase();
-                if (outputToken !== USDC_BASE) continue;
+                const tokenData = WHITELIST[outputToken];
+
+                if (!tokenData) continue;
 
                 const rawAmount = output.amount || output.startAmount || "0";
 
-                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), 6));
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), tokenData.decimals) * tokenData.priceUSD);
 
                 console.log(
                     `[UniswapX] match orderHash=${orderHash} token=${outputToken} amount=${amountUSD}`
@@ -169,9 +183,6 @@ export function startAllListeners(onIntent: IntentCallback) {
                 body: JSON.stringify({
                     takeChainIds: [8453],
                     orderStates: ["Created"],
-                    takeOfferWithMetadata: {
-                        tokenAddress: USDC_BASE
-                    },
                     skip: 0,
                     take: 20,
                     filterMode: "CrossChain"
@@ -190,6 +201,9 @@ export function startAllListeners(onIntent: IntentCallback) {
                 // token extraction
                 const fromToken = order.giveOfferWithMetadata?.tokenAddress?.stringValue?.toLowerCase() || "unkown";
                 const toToken = order.takeOfferWithMetadata?.tokenAddress?.stringValue?.toLowerCase() || "unkown";
+
+                const tokenData = WHITELIST[toToken];
+                if (!tokenData) continue;
 
                 // amount extraction
                 const rawAmount = order.takeOfferWithMetadata?.amount?.stringValue ||
@@ -219,6 +233,6 @@ export function startAllListeners(onIntent: IntentCallback) {
     }, 10000);
 
     // Clear seen orders hourly
-    setInterval(() => seenDebridgeOrders.clear(), 60 * 60 * 1000);
+    setInterval(() => { acrossSeen.clear(); seenOrders.clear(); seenDebridgeOrders.clear(); }, 3600000);
 
 }

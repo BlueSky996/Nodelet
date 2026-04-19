@@ -6,7 +6,7 @@ import { config } from "./config.js";
 
 // --- Whitelisted "Big 5" Tokens on Base ---
 // We only trade these to avoid scams and ensure high liquidity
-export const TOKENS: Record<string, { decimals: number; symbol: string; priceUSD: number }> = {
+export const WHITELIST: Record<string, { decimals: number; symbol: string; priceUSD: number }> = {
     "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { decimals: 6, symbol: "USDC", priceUSD: 1 },
     "0x4200000000000000000000000000000000000006": { decimals: 18, symbol: "WETH", priceUSD: 2500 },
     "0x0000000000000000000000000000000000000000": { decimals: 18, symbol: "ETH", priceUSD: 2500 },
@@ -22,7 +22,7 @@ const ERC20_ABI = ["function balanceOf(address) view returns (uint256)"];
 async function getInventoryUSD(): Promise<Record<string, number>> {
     const inventory: Record<string, number> = {};
 
-    for (const [address, info] of Object.entries(TOKENS)) {
+    for (const [address, info] of Object.entries(WHITELIST)) {
         let balance;
         if (address === "0x0000000000000000000000000000000000000000") {
             balance = await provider.getBalance(wallet.address);
@@ -48,7 +48,7 @@ export async function isSafe(
     const source = fromToken.toLowerCase();
 
     // whitelist check
-    if (!TOKENS[target]) {
+    if (!WHITELIST[target]) {
         return { safe: false, reason: "Token not in whitelist", needsSwap: false };
     }
 
@@ -91,7 +91,7 @@ export async function isSafe(
     }
 
     if (highestVal >= (amountUSD + executionCosts)) {
-        const sourceSymbol = TOKENS[bestSource]?.symbol || "Unknown";
+        const sourceSymbol = WHITELIST[bestSource]?.symbol || "Unknown";
         return {
             safe: true,
             reason: `Swap required from ${sourceSymbol}`,
