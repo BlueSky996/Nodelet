@@ -1,19 +1,12 @@
 import { WHITELIST } from "./guard.js";
 import { ethers } from "ethers";
+import { updatePrices, getCachedPrice } from "./priceService.js";
 
 // --- Contract Addresses ---
 const ACROSS_SPOKE_POOL = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
 
 // Extract just the addresses for API filtering
 const WHITELISTED_ADDRESSES = Object.keys(WHITELIST);
-
-
-const getPriceUSD = (tokenSymbol: string): number => {
-    // Logic to fetch from Pyth/Chainlink/CoinGecko goes here
-    const prices: Record<string, number> = { "USDC": 1, "ETH": 2500, "WETH": 2500, "cbBTC": 65000, "AERO": 0.80 };
-    return prices[tokenSymbol] || 0;
-};
-
 
 // Multi-origin SpokePools (high volume origins to Base USDC)
 const ACROSS_ORIGINS = [
@@ -59,7 +52,12 @@ const createProvider = (chainId: number): ethers.WebSocketProvider => {
 };
 
 // Start all listeners
-export function startAllListeners(onIntent: IntentCallback) {
+export async function startAllListeners(onIntent: IntentCallback) {
+
+    // Update prices on startup
+    await updatePrices();
+    // Then update every 60 seconds
+    setInterval(updatePrices, 60000);
 
     console.log("Listening on Across");
     const acrossSeen = new Set<string>();
@@ -78,7 +76,7 @@ export function startAllListeners(onIntent: IntentCallback) {
             if (acrossSeen.has(key)) return;
             acrossSeen.add(key);
 
-            const amountUSD = parseFloat(ethers.formatUnits(outputAmount, tokenData.decimals) * tokenData.priceUSD);
+            const amountUSD = parseFloat(ethers.formatUnits(outputAmount, tokenData.decimals)) * getCachedPrice(tokenData.symbol);
             // skip if amount is too small or too large
 
             console.log(
@@ -148,7 +146,7 @@ export function startAllListeners(onIntent: IntentCallback) {
 
                 const rawAmount = output.amount || output.startAmount || "0";
 
-                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), tokenData.decimals) * tokenData.priceUSD);
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), tokenData.decimals)) * getCachedPrice(tokenData.symbol);
 
                 console.log(
                     `[UniswapX] match orderHash=${orderHash} token=${outputToken} amount=${amountUSD}`
@@ -209,9 +207,7 @@ export function startAllListeners(onIntent: IntentCallback) {
                 const rawAmount = order.takeOfferWithMetadata?.amount?.stringValue ||
                     order.takeOfferWithMetadata?.finalAmount?.stringValue || "0";
 
-                const decimals = order.takeOfferWithMetadata?.decimals || 6;
-
-                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), decimals));
+                const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), tokenData.decimals)) * getCachedPrice(tokenData.symbol);
 
                 console.log(
                     `[deBridge] match orderId=${order.orderId} amount=${amountUSD}`
