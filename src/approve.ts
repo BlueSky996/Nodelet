@@ -28,7 +28,7 @@ async function main() {
         try {
             const contract = new ethers.Contract(token.address, ERC20_ABI, wallet);
 
-            // We use MaxUint256 so we only ever pay gas for this ONCE.
+            // We use MaxUint256 so we only ever pay gas for this once.
             const tx = await (contract as any).approve(ZERO_EX_PROXY, ethers.MaxUint256);
             console.log(`⏳ Approving ${token.name}...`);
             await tx.wait();

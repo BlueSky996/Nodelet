@@ -34,7 +34,7 @@ async function run() {
                 toToken: intent.toToken,
                 amountUSD: intent.amountUSD,
                 needsSwap: guard.needsSwap,
-                sourceToken: guard.sourceToken,
+                sourceToken: guard.sourceToken ?? "",
             };
 
             const decision = await askSolver(solverIntent);

@@ -2,6 +2,7 @@ import { ethers, Contract } from "ethers";
 import dotenv from "dotenv";
 dotenv.config();
 import { config } from "./config.js";
+import { getCachedPrice } from "./priceService.js";
 
 
 // --- Whitelisted "Big 5" Tokens on Base ---
@@ -31,7 +32,7 @@ async function getInventoryUSD(): Promise<Record<string, number>> {
             balance = await (contract as any).balanceOf(wallet.address);
         }
         const units = parseFloat(ethers.formatUnits(balance, info.decimals));
-        inventory[address.toLowerCase()] = units * info.priceUSD;
+        inventory[address.toLowerCase()] = units * getCachedPrice(info.symbol);
     }
 
     return inventory;
@@ -45,7 +46,6 @@ export async function isSafe(
 ): Promise<{ safe: boolean; reason: string; needsSwap: boolean; sourceToken?: string }> {
 
     const target = toToken.toLowerCase();
-    const source = fromToken.toLowerCase();
 
     // whitelist check
     if (!WHITELIST[target]) {
