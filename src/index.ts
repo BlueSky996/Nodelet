@@ -1,5 +1,5 @@
 import { askSolver, type Intent } from "./solver.js";
-import { fillIntent } from "./filler.js";
+import { executeFill } from "./filler.js";
 import { isSafe } from "./guard.js";
 import { startAllListeners } from "./protocols.js";
 import { executeSwap } from "./swapper.js";
@@ -49,12 +49,13 @@ async function run() {
                         console.log(" Swap failed, skipping fill")
                         return;
                     }
-                }
-                console.log(" Executing fill ...")
-                if (intent.protocol === "Across") {
-                    await fillIntent(intent.raw.relay); // exact relay object
-                } else {
-                    console.log(`| info: ${intent.protocol} not supported yet`);
+
+                    const success = await executeFill(intent.protocol, intent.raw);
+                    if (success) {
+                        console.log(" Fill successful!");
+                    } else {
+                        console.log(" Fill failed, skipping fill");
+                    }
                 }
             }
         } catch (err: any) {
