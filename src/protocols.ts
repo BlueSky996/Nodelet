@@ -1,12 +1,16 @@
 import { WHITELIST } from "./guard.js";
 import { ethers } from "ethers";
 import { updatePrices, getCachedPrice } from "./priceService.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 // --- Contract Addresses ---
 const ACROSS_SPOKE_POOL = "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
 
 // Extract just the addresses for API filtering
 const WHITELISTED_ADDRESSES = Object.keys(WHITELIST);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "");
+const SOLVER_ADDRESS = wallet.address;
 
 // Multi-origin SpokePools (high volume origins to Base USDC)
 const ACROSS_ORIGINS = [
@@ -145,7 +149,6 @@ export async function startAllListeners(onIntent: IntentCallback) {
                 if (!tokenData) continue;
 
                 const rawAmount = output.amount || output.startAmount || "0";
-
                 const amountUSD = parseFloat(ethers.formatUnits(BigInt(rawAmount), tokenData.decimals)) * getCachedPrice(tokenData.symbol);
 
                 console.log(
@@ -158,8 +161,12 @@ export async function startAllListeners(onIntent: IntentCallback) {
                     amountUSD,
                     fromToken: order.input?.token || "unknown",
                     toToken: output.token || "unknown",
-                    fillDeadline: order.deadline || Math.floor(Date.now() / 1000) + 120,
-                    raw: order,
+                    fillDeadline: order.info?.deadline || Math.floor(Date.now() / 1000) + 120,
+                    raw: {
+                        orderHash: order.orderHash,
+                        encodedOrder: order.encodedOrder,
+                        signature: order.signature
+                    }
                 });
             }
         } catch (err: any) {
@@ -203,6 +210,13 @@ export async function startAllListeners(onIntent: IntentCallback) {
                 const tokenData = WHITELIST[toToken];
                 if (!tokenData) continue;
 
+                const fulfillRes = await fetch(`https://dln-api.debridge.finance/api/Orders/${orderId}/fulfillment-params?takerAddress=${SOLVER_ADDRESS}`)
+                if (!fulfillRes.ok) {
+                    console.warn(`| [deBridge] Could not get fulfillment params for ${orderId}`)
+                    continue;
+                }
+                const fulfillData = await fulfillRes.json()
+
                 // amount extraction
                 const rawAmount = order.takeOfferWithMetadata?.amount?.stringValue ||
                     order.takeOfferWithMetadata?.finalAmount?.stringValue || "0";
@@ -220,7 +234,10 @@ export async function startAllListeners(onIntent: IntentCallback) {
                     fromToken,
                     toToken,
                     fillDeadline: Math.floor(Date.now() / 1000) + 120,
-                    raw: order,
+                    raw: {
+                        orderId: orderId,
+                        fulfillmentBytes: fulfillData.fulfillmentBytes
+                    }
                 });
             }
         } catch (err: any) {
