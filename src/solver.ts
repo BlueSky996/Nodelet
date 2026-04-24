@@ -23,7 +23,6 @@ export function askSolver(intent: Intent): Promise<{ action: "fill" | "skip"; re
         const child = spawn("zeroclaw", ["agent", "-m", prompt]);
 
         let output = "";
-
         child.stdout.on("data", (data) => {
             output += data.toString();
         });
@@ -31,14 +30,16 @@ export function askSolver(intent: Intent): Promise<{ action: "fill" | "skip"; re
 
         child.on("close", () => {
             try {
-                console.log("🔍 Raw ZeroClaw response:", output);
-
                 const match = output.match(/\{[^}]*\}/);
                 if (!match) {
                     return resolve({ action: "skip", reason: "no valid response" });
                 }
 
-                return resolve(JSON.parse(match[0]));
+                const result = JSON.parse(match[0]);
+                resolve({
+                    action: result.action === "fill" ? "fill" : "skip",
+                    reason: result.reason || "no reason provided"
+                })
             } catch {
                 return resolve({ action: "skip", reason: "parse error" });
             }
