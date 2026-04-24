@@ -51,7 +51,11 @@ async function run() {
                     }
                 }
                 console.log(" Executing fill ...")
-                await fillIntent(intent.raw.relay); // exact relay object
+                if (intent.protocol === "Across") {
+                    await fillIntent(intent.raw.relay); // exact relay object
+                } else {
+                    console.log(`| info: ${intent.protocol} not supported yet`);
+                }
             }
         } catch (err: any) {
             console.error(" Intent processing error (bot stay alive):", err.message);

@@ -13,6 +13,7 @@ const provider = new ethers.WebSocketProvider(process.env.ALCHEMY_WSS || "");
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 const spokePool = new ethers.Contract(SPOKE_POOL_BASE, FILL_ABI, wallet);
 
+// track filled intents
 const filled = new Set<string>();
 
 export async function fillIntent(relayData: any) {
@@ -25,13 +26,17 @@ export async function fillIntent(relayData: any) {
 
     try {
         console.log(` [Across] attempting fill for deposit ${relayData.depositId} on chain ${relayData.originChainId}`)
+        // repaid on base
         const repaymentChainId = 8453;
+        // fetch current gas prices for base to ensure fast inclusion
         const feeData = await provider.getFeeData();
-        const tx = await spokePool.fillV3Relay(relayData, repaymentChainId, {
+
+        const tx = await (spokePool as any).fillV3Relay(relayData, repaymentChainId, {
             gasLimit: 600000,
             maxFeePerGas: feeData.maxFeePerGas,
             maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
         });
+
         console.log(" [Across] TX sent:", tx.hash);
         filled.add(key);
         const receipt = await tx.wait();
