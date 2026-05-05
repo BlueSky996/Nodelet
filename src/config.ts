@@ -7,7 +7,7 @@ export const config = {
     solverFeePercent: 0.5, // 0.5 max fee
     minProfitUSD: 0.1, // ignore intents below 0.1 USD
     minAmountUSD: 7,
-    maxAmountUSD: 100,
+    maxAmountUSD: 500,
     gasEstimateUSD: 0.001,
 
 };

@@ -27,6 +27,10 @@ export function askSolver(intent: Intent): Promise<{ action: "fill" | "skip"; re
             output += data.toString();
         });
 
+        console.log("\n--- 🤖 ZeroClaw Thinking ---");
+        console.log(output.trim());
+        console.log("---------------------------\n");
+
 
         child.on("close", () => {
             try {
